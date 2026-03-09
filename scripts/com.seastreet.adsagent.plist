@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.seastreet.adsagent</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/martinheath/Agent for meta ads campaigns/venv/bin/python</string>
+        <string>/Users/martinheath/Agent for meta ads campaigns/scripts/run_agent.py</string>
+        <string>--email</string>
+        <string>--date-range</string>
+        <string>last_7d</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/martinheath/Agent for meta ads campaigns</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>17</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/martinheath/Agent for meta ads campaigns/data/logs/cron_stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/martinheath/Agent for meta ads campaigns/data/logs/cron_stderr.log</string>
+</dict>
+</plist>
