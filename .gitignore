@@ -51,6 +51,7 @@ data/exports/*.html
 
 # Markdown files
 *.md
+!README.md
 
 # OS
 .DS_Store
