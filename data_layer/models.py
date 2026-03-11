@@ -81,6 +81,7 @@ class Ad:
     call_to_action_type: Optional[str] = None
     image_url: Optional[str] = None
     link_url: Optional[str] = None
+    creative_format: Optional[str] = None  # e.g. "carousel (2 images)", "single image", "video"
 
 
 @dataclass

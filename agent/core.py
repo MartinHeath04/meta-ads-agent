@@ -346,6 +346,7 @@ class MetaAdsAgent:
 **{ad.name}** (ID: {ad.id})
 - Ad Set: {ad.adset_id}
 - Status: {ad.status}
+- Creative Format: {ad.creative_format or 'N/A'}
 - Primary Text: {ad.primary_text or 'N/A'}
 - Headline: {ad.headline or 'N/A'}
 - CTA: {ad.call_to_action_type or 'N/A'}

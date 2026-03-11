@@ -287,12 +287,26 @@ class MetaAPIClient:
                     ad.primary_text = cr.get("body")
                     ad.headline = cr.get("title")
 
-                    # Extract CTA from object_story_spec if available
+                    # Extract CTA and creative format from object_story_spec
                     story_spec = cr.get("object_story_spec")
                     if story_spec:
                         link_data = story_spec.get("link_data", {})
                         cta = link_data.get("call_to_action", {})
                         ad.call_to_action_type = cta.get("type")
+
+                        # Determine creative format (carousel, single image, video)
+                        children = link_data.get("child_attachments", [])
+                        if children:
+                            ad.creative_format = f"carousel ({len(children)} images)"
+                        elif link_data.get("image_hash"):
+                            ad.creative_format = "single image"
+
+                        video_data = story_spec.get("video_data")
+                        if video_data:
+                            ad.creative_format = "video"
+
+                    if not ad.creative_format:
+                        ad.creative_format = "single image" if cr.get("thumbnail_url") else "unknown"
                 except Exception as e:
                     logger.warning(f"Could not fetch creative {creative_id}: {e}")
 
