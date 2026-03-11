@@ -6,7 +6,7 @@ data fetching, LLM analysis, and action execution.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from .brain import AgentBrain, AnalysisResult
@@ -205,6 +205,31 @@ class MetaAdsAgent:
         all_campaign_insights = self.meta_client.get_campaign_insights(date_preset=date_range)
         campaign_insights = {k: v for k, v in all_campaign_insights.items() if k in valid_campaign_ids}
 
+        # Filter out stale campaigns: ACTIVE status but no spend and not recently created (< 48h)
+        # These are campaigns the API reports as active but aren't actually delivering
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(hours=48)
+        delivering_campaign_ids = set()
+        for campaign in campaigns:
+            cid = campaign.id
+            has_spend = cid in campaign_insights and campaign_insights[cid].spend > 0
+            is_new = campaign.created_time and campaign.created_time >= cutoff
+            if has_spend or is_new:
+                delivering_campaign_ids.add(cid)
+
+        stale_count = len(valid_campaign_ids) - len(delivering_campaign_ids)
+        if stale_count > 0:
+            logger.info(f"Excluded {stale_count} stale campaigns (active but no delivery)")
+
+        # Use delivering campaigns only
+        campaigns = [c for c in campaigns if c.id in delivering_campaign_ids]
+        campaign_insights = {k: v for k, v in campaign_insights.items() if k in delivering_campaign_ids}
+
+        # Re-filter ad sets and ads to only delivering campaigns
+        adsets = [a for a in adsets if a.campaign_id in delivering_campaign_ids]
+        valid_adset_ids = {a.id for a in adsets}
+        ads = [a for a in ads if a.adset_id in valid_adset_ids]
+
         all_adset_insights = self.meta_client.get_adset_insights(date_preset=date_range)
         adset_insights = {k: v for k, v in all_adset_insights.items() if k in valid_adset_ids}
 
@@ -258,17 +283,52 @@ class MetaAdsAgent:
 
         lines = []
         for adset in adsets:
+            # Format targeting info
+            targeting_str = "N/A"
+            if adset.targeting:
+                targeting_parts = []
+                geo = adset.targeting.get("geo_locations", {})
+                if geo:
+                    locations = []
+                    for loc in geo.get("custom_locations", []):
+                        name = loc.get("name", loc.get("address_string", ""))
+                        radius = loc.get("radius", "")
+                        unit = loc.get("distance_unit", "mile")
+                        if name:
+                            locations.append(f"{name} (+{radius} {unit})" if radius else name)
+                    for city in geo.get("cities", []):
+                        locations.append(city.get("name", ""))
+                    for region in geo.get("regions", []):
+                        locations.append(region.get("name", ""))
+                    if locations:
+                        targeting_parts.append(f"Locations: {', '.join(locations)}")
+                age_min = adset.targeting.get("age_min")
+                age_max = adset.targeting.get("age_max")
+                if age_min or age_max:
+                    targeting_parts.append(f"Age: {age_min or '?'}-{age_max or '?'}")
+                targeting_str = " | ".join(targeting_parts) if targeting_parts else "Broad targeting"
+
             insight = insights.get(adset.id)
             if insight:
                 lines.append(f"""
 **{adset.name}** (ID: {adset.id})
 - Campaign: {adset.campaign_id}
 - Status: {adset.status}
+- Targeting: {targeting_str}
+- Optimization: {adset.optimization_goal or 'N/A'}
 - Spend: ${insight.spend:.2f}
 - Impressions: {insight.impressions:,}
 - Clicks: {insight.clicks:,}
 - CTR: {insight.ctr:.2f}%
 - Messages: {insight.messages}
+""")
+            else:
+                lines.append(f"""
+**{adset.name}** (ID: {adset.id})
+- Campaign: {adset.campaign_id}
+- Status: {adset.status}
+- Targeting: {targeting_str}
+- No performance data available
 """)
 
         return "\n".join(lines) if lines else "No ad set data available."

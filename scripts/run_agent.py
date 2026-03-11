@@ -18,6 +18,9 @@ import os
 import argparse
 import logging
 import smtplib
+import socket
+import time
+import requests.exceptions
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
@@ -35,6 +38,38 @@ from agent.brain import AgentBrain
 from agent.memory import AgentMemory
 from agent.core import MetaAdsAgent
 from data_layer.meta_client import MetaAPIClient
+
+
+def wait_for_network(max_wait: int = 120, check_interval: int = 5):
+    """
+    Wait for network connectivity before proceeding.
+
+    When macOS wakes from sleep and launchd fires a missed job,
+    WiFi may not be connected yet. This waits until DNS resolves.
+
+    Args:
+        max_wait: Maximum seconds to wait for network
+        check_interval: Seconds between checks
+    """
+    logger = logging.getLogger(__name__)
+    hosts_to_check = ["graph.facebook.com", "api.anthropic.com"]
+    elapsed = 0
+
+    while elapsed < max_wait:
+        for host in hosts_to_check:
+            try:
+                socket.getaddrinfo(host, 443, socket.AF_INET, socket.SOCK_STREAM)
+                logger.info(f"Network ready - resolved {host} after {elapsed}s")
+                return True
+            except socket.gaierror:
+                pass
+
+        logger.info(f"Waiting for network... ({elapsed}/{max_wait}s)")
+        time.sleep(check_interval)
+        elapsed += check_interval
+
+    logger.error(f"Network not available after {max_wait}s")
+    return False
 
 
 def setup_logging(log_level: str = "INFO", log_dir: Path = None):
@@ -235,37 +270,67 @@ def main():
         success = test_meta()
         sys.exit(0 if success else 1)
 
-    # Initialize components for full run
-    print("Initializing agent components...")
-
-    try:
-        meta_client = MetaAPIClient()
-        logger.info("Meta API client initialized")
-    except Exception as e:
-        print(f"Failed to initialize Meta API client: {e}")
+    # Wait for network (critical for wake-from-sleep scenarios)
+    logger.info("Checking network connectivity...")
+    if not wait_for_network(max_wait=120, check_interval=5):
+        logger.error("No network connectivity. Aborting.")
+        print("ERROR: No network connectivity after 2 minutes. Agent cannot run.")
         sys.exit(1)
 
-    brain = AgentBrain()
-    logger.info("Agent brain initialized")
+    # Retry logic for the full agent run
+    max_retries = 3
+    retry_delay = 30  # seconds between retries
 
-    db_path = str(settings.database_path)
-    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    memory = AgentMemory(db_path=db_path)
-    logger.info("Agent memory initialized")
+    for attempt in range(1, max_retries + 1):
+        try:
+            logger.info(f"Agent run attempt {attempt}/{max_retries}")
 
-    agent = MetaAdsAgent(
-        meta_client=meta_client,
-        brain=brain,
-        memory=memory,
-        dry_run=args.dry_run,
-    )
-    logger.info("Agent ready")
+            # Initialize components for full run
+            print("Initializing agent components...")
 
-    # Run the requested mode
-    if args.quick:
-        run_quick_check(agent)
-    else:
-        run_daily_analysis(agent, date_range=args.date_range, email=args.email)
+            meta_client = MetaAPIClient()
+            logger.info("Meta API client initialized")
+
+            brain = AgentBrain()
+            logger.info("Agent brain initialized")
+
+            db_path = str(settings.database_path)
+            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+            memory = AgentMemory(db_path=db_path)
+            logger.info("Agent memory initialized")
+
+            agent = MetaAdsAgent(
+                meta_client=meta_client,
+                brain=brain,
+                memory=memory,
+                dry_run=args.dry_run,
+            )
+            logger.info("Agent ready")
+
+            # Run the requested mode
+            if args.quick:
+                run_quick_check(agent)
+            else:
+                run_daily_analysis(agent, date_range=args.date_range, email=args.email)
+
+            # If we get here, it succeeded
+            break
+
+        except (ConnectionError, requests.exceptions.ConnectionError, socket.gaierror, OSError) as e:
+            logger.warning(f"Attempt {attempt} failed (network error): {e}")
+            if attempt < max_retries:
+                logger.info(f"Retrying in {retry_delay}s...")
+                time.sleep(retry_delay)
+            else:
+                logger.error(f"All {max_retries} attempts failed. Last error: {e}")
+                print(f"ERROR: Agent failed after {max_retries} attempts: {e}")
+                sys.exit(1)
+
+        except Exception as e:
+            # Non-network errors should not retry
+            logger.exception(f"Agent failed with non-recoverable error: {e}")
+            print(f"ERROR: Agent failed: {e}")
+            sys.exit(1)
 
 
 if __name__ == "__main__":

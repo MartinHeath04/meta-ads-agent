@@ -15,6 +15,7 @@ from facebook_business.adobjects.adaccount import AdAccount
 from facebook_business.adobjects.campaign import Campaign as FBCampaign
 from facebook_business.adobjects.adset import AdSet as FBAdSet
 from facebook_business.adobjects.ad import Ad as FBAd
+from facebook_business.adobjects.adcreative import AdCreative as FBAdCreative
 
 from .models import Campaign, AdSet, Ad, Insights
 
@@ -260,8 +261,12 @@ class MetaAPIClient:
                 continue
 
             # Extract creative info if available
-            creative = fb_ad.get("creative", {})
-            creative_id = creative.get("id") if isinstance(creative, dict) else None
+            creative = fb_ad.get("creative")
+            creative_id = None
+            if creative and hasattr(creative, "get"):
+                creative_id = creative.get("id")
+            elif isinstance(creative, dict):
+                creative_id = creative.get("id")
 
             ad = Ad(
                 id=fb_ad.get("id"),
@@ -272,6 +277,25 @@ class MetaAPIClient:
                 creative_id=creative_id,
                 created_time=self._parse_datetime(fb_ad.get("created_time")),
             )
+
+            # Fetch creative content (ad copy, headline, CTA)
+            if creative_id:
+                try:
+                    cr = FBAdCreative(creative_id).api_get(
+                        fields=["body", "title", "name", "object_story_spec"]
+                    )
+                    ad.primary_text = cr.get("body")
+                    ad.headline = cr.get("title")
+
+                    # Extract CTA from object_story_spec if available
+                    story_spec = cr.get("object_story_spec")
+                    if story_spec:
+                        link_data = story_spec.get("link_data", {})
+                        cta = link_data.get("call_to_action", {})
+                        ad.call_to_action_type = cta.get("type")
+                except Exception as e:
+                    logger.warning(f"Could not fetch creative {creative_id}: {e}")
+
             ads.append(ad)
 
         logger.info(f"Fetched {len(ads)} ads")
