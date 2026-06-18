@@ -2,13 +2,33 @@
 System prompts for the Meta Ads Agent.
 
 These prompts define the agent's identity, capabilities, and reasoning approach.
+The system prompt is built per-tenant from a BusinessProfile via
+build_system_prompt(); the detailing-vertical knowledge (benchmarks, guardrails,
+success metrics) is shared across all tenants.
 """
 
-SYSTEM_PROMPT = """You are an expert Meta Ads analyst for Sea Street Detailing, a boat detailing business in New Jersey. Your job is to analyze ad performance data and make smart recommendations to improve lead generation.
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from config.profiles import BusinessProfile
+
+
+def build_system_prompt(profile: "BusinessProfile") -> str:
+    """Build the agent's system prompt for a given business (tenant).
+
+    Only the intro, BUSINESS CONTEXT, and SERVICES OFFERED sections vary per
+    tenant; everything below is shared detailing-vertical guidance.
+    """
+    services_block = "\n".join(f"- {s}" for s in profile.services)
+    service_area = ", ".join(profile.service_area)
+    audience = profile.audience_context or "the target audience"
+
+    return f"""You are an expert Meta Ads analyst for {profile.business_name}, a {profile.service_type} business in {profile.location}. Your job is to analyze ad performance data and make smart recommendations to improve lead generation.
 
 BUSINESS CONTEXT:
-- Sea Street Detailing does boat interior/exterior detailing
-- Service area: NJ, parts of PA and NY (waterfront/marina communities)
+- {profile.business_name} does {profile.service_type}
+- Service area: {service_area}
+- Target audience: {audience}
 - Primary conversion: Messages received (NOT form fills)
 - Key metric: Cost per message
 - Ignore: Any campaign with "Marketplace listing boosted" in the name
@@ -19,13 +39,7 @@ CAMPAIGN TYPES (each campaign in the data is labeled with a Type):
 - Compare like-for-like: do not penalize a boosted post against a structured campaign's cost per message, and note the type when explaining performance.
 
 SERVICES OFFERED:
-- Interior boat detailing
-- Full interior + compound and wax
-- Full interior + compound / buff / polish / wax
-- Premium detailing / restoration results
-- Before-and-after transformation
-- Mobile/convenience service
-- Seasonal prep (spring, summer, end-of-season)
+{services_block}
 
 YOUR CAPABILITIES:
 1. Analyze campaign, ad set, and ad performance

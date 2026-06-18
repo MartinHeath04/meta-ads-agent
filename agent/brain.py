@@ -12,7 +12,8 @@ from dataclasses import dataclass
 
 import anthropic
 
-from .prompts import SYSTEM_PROMPT, ANALYSIS_PROMPT_TEMPLATE, QUICK_ANALYSIS_PROMPT
+from .prompts import build_system_prompt, ANALYSIS_PROMPT_TEMPLATE, QUICK_ANALYSIS_PROMPT
+from config.profiles import BusinessProfile, DEFAULT_PROFILE
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,8 @@ class AgentBrain:
         self,
         api_key: str = None,
         model: str = "claude-sonnet-4-20250514",
-        max_tokens: int = 4096
+        max_tokens: int = 4096,
+        business_profile: BusinessProfile = None,
     ):
         """
         Initialize the agent brain.
@@ -52,6 +54,8 @@ class AgentBrain:
             api_key: Anthropic API key. Reads from ANTHROPIC_API_KEY env var if not provided.
             model: Claude model to use. Defaults to claude-sonnet-4-20250514 for cost efficiency.
             max_tokens: Maximum tokens in response.
+            business_profile: Tenant business profile that drives the system prompt.
+                Defaults to DEFAULT_PROFILE (the original single-tenant business).
         """
         self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
         if not self.api_key:
@@ -61,9 +65,14 @@ class AgentBrain:
 
         self.model = model
         self.max_tokens = max_tokens
+        self.business_profile = business_profile or DEFAULT_PROFILE
+        self.system_prompt = build_system_prompt(self.business_profile)
         self.client = anthropic.Anthropic(api_key=self.api_key)
 
-        logger.info(f"AgentBrain initialized with model: {self.model}")
+        logger.info(
+            f"AgentBrain initialized with model: {self.model} "
+            f"for business: {self.business_profile.business_name}"
+        )
 
     def analyze(
         self,
@@ -101,7 +110,7 @@ class AgentBrain:
         message = self.client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
-            system=SYSTEM_PROMPT,
+            system=self.system_prompt,
             messages=[
                 {"role": "user", "content": prompt}
             ]
@@ -134,7 +143,7 @@ class AgentBrain:
         message = self.client.messages.create(
             model=self.model,
             max_tokens=1024,
-            system=SYSTEM_PROMPT,
+            system=self.system_prompt,
             messages=[
                 {"role": "user", "content": prompt}
             ]
@@ -158,7 +167,7 @@ class AgentBrain:
         message = self.client.messages.create(
             model=self.model,
             max_tokens=2048,
-            system=SYSTEM_PROMPT,
+            system=self.system_prompt,
             messages=[
                 {"role": "user", "content": prompt}
             ]
