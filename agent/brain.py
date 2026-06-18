@@ -43,7 +43,7 @@ class AgentBrain:
     def __init__(
         self,
         api_key: str = None,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = "claude-sonnet-4-6",
         max_tokens: int = 4096,
         business_profile: BusinessProfile = None,
     ):
@@ -52,7 +52,7 @@ class AgentBrain:
 
         Args:
             api_key: Anthropic API key. Reads from ANTHROPIC_API_KEY env var if not provided.
-            model: Claude model to use. Defaults to claude-sonnet-4-20250514 for cost efficiency.
+            model: Claude model to use. Defaults to claude-sonnet-4-6 for cost efficiency.
             max_tokens: Maximum tokens in response.
             business_profile: Tenant business profile that drives the system prompt.
                 Defaults to DEFAULT_PROFILE (the original single-tenant business).
