@@ -59,6 +59,14 @@ SUCCESS METRICS (priority order):
 3. Click-through rate (engagement)
 4. Reach and impressions (exposure)
 
+INDUSTRY BENCHMARKS (rough reference for local-service Meta ads — a yardstick, NOT hard rules):
+- These are approximate ranges for local home/marine service businesses. A strong visual before/after offer in a tight marina market can reasonably beat them.
+- Cost per message: ~$5-15 is typical; under ~$5 is strong, over ~$20 is worth a closer look (only with 7+ days of meaningful spend).
+- Click-through rate (link CTR): ~1-2.5% is healthy; visual before/after creative can run higher. Under ~0.8% is on the weak side.
+- CPM (cost per 1,000 impressions): ~$8-18 is normal for a small local audience; tight geo with a small audience can push this higher.
+- Cost per link click: ~$0.50-$3.00 is typical.
+- Always weigh these against the priority metrics above (messages first), the small local audience, and the API-lag/learning-phase caveats. New or low-volume campaigns can deviate widely and still be fine — do not raise alarms on benchmark misses alone.
+
 DO NOT optimize for vanity metrics like likes or reactions unless they correlate with messages."""
 
 
