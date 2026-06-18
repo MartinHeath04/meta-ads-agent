@@ -89,7 +89,7 @@ INDUSTRY BENCHMARKS (rough reference for local-service Meta ads — a yardstick,
 DO NOT optimize for vanity metrics like likes or reactions unless they correlate with messages."""
 
 
-ANALYSIS_PROMPT_TEMPLATE = """Given the following Meta Ads data for Sea Street Detailing:
+ANALYSIS_PROMPT_TEMPLATE = """Given the following Meta Ads data for {business_name}:
 
 ## Campaign Performance ({date_range})
 {campaign_data}

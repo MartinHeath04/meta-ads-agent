@@ -97,6 +97,7 @@ class AgentBrain:
         """
         # Build the analysis prompt
         prompt = ANALYSIS_PROMPT_TEMPLATE.format(
+            business_name=self.business_profile.business_name,
             date_range=date_range,
             campaign_data=campaign_data,
             adset_data=adset_data,

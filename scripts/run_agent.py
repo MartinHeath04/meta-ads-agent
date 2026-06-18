@@ -34,6 +34,7 @@ from dotenv import load_dotenv
 load_dotenv(PROJECT_ROOT / ".env")
 
 from config.settings import get_settings
+from config.profiles import DEFAULT_PROFILE
 from agent.brain import AgentBrain
 from agent.memory import AgentMemory
 from agent.core import MetaAdsAgent
@@ -155,7 +156,7 @@ def run_quick_check(agent: MetaAdsAgent):
         raise
 
 
-def send_email(report: str, settings):
+def send_email(report: str, settings, business_name: str = "Meta Ads"):
     """Send the report via email."""
     logger = logging.getLogger(__name__)
 
@@ -166,7 +167,7 @@ def send_email(report: str, settings):
     today = datetime.now().strftime('%Y-%m-%d')
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Sea Street Ads Report - {today}"
+    msg["Subject"] = f"{business_name} Ads Report - {today}"
     msg["From"] = settings.smtp_user
     msg["To"] = settings.email_to
 
@@ -192,7 +193,7 @@ def send_email(report: str, settings):
 def run_daily_analysis(agent: MetaAdsAgent, date_range: str = "last_7d", email: bool = False):
     """Run the full daily analysis."""
     print(f"\n{'='*60}")
-    print(f"  Sea Street Detailing - Meta Ads AI Agent")
+    print(f"  {agent.business_profile.business_name} - Meta Ads AI Agent")
     print(f"  Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"  Analyzing: {date_range}")
     print(f"{'='*60}\n")
@@ -225,7 +226,7 @@ def run_daily_analysis(agent: MetaAdsAgent, date_range: str = "last_7d", email: 
 
         # Send email if requested
         if email:
-            send_email(report, settings)
+            send_email(report, settings, business_name=agent.business_profile.business_name)
 
         return result
 
@@ -236,7 +237,7 @@ def run_daily_analysis(agent: MetaAdsAgent, date_range: str = "last_7d", email: 
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Sea Street Detailing Meta Ads AI Agent")
+    parser = argparse.ArgumentParser(description="Meta Ads AI Agent (multi-tenant, detailing vertical)")
     parser.add_argument("--quick", action="store_true", help="Run quick health check")
     parser.add_argument("--test-brain", action="store_true", help="Test Claude API connection")
     parser.add_argument("--test-meta", action="store_true", help="Test Meta API connection")
@@ -288,10 +289,13 @@ def main():
             # Initialize components for full run
             print("Initializing agent components...")
 
+            # Tenant business profile (placeholder default until per-tenant config exists)
+            profile = DEFAULT_PROFILE
+
             meta_client = MetaAPIClient()
             logger.info("Meta API client initialized")
 
-            brain = AgentBrain()
+            brain = AgentBrain(business_profile=profile)
             logger.info("Agent brain initialized")
 
             db_path = str(settings.database_path)
@@ -304,6 +308,7 @@ def main():
                 brain=brain,
                 memory=memory,
                 dry_run=args.dry_run,
+                business_profile=profile,
             )
             logger.info("Agent ready")
 

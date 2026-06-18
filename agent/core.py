@@ -12,6 +12,7 @@ from typing import Optional
 from .brain import AgentBrain, AnalysisResult
 from .memory import AgentMemory, Decision
 from .actions import ActionExecutor, ActionRequest, ActionType
+from config.profiles import BusinessProfile, DEFAULT_PROFILE
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,8 @@ class MetaAdsAgent:
         brain: AgentBrain = None,
         memory: AgentMemory = None,
         action_executor: ActionExecutor = None,
-        dry_run: bool = True
+        dry_run: bool = True,
+        business_profile: BusinessProfile = None
     ):
         """
         Initialize the agent.
@@ -46,9 +48,11 @@ class MetaAdsAgent:
             memory: Agent memory for learning (creates default if not provided)
             action_executor: For executing actions (creates default if not provided)
             dry_run: If True, don't actually execute actions
+            business_profile: Tenant business profile (defaults to DEFAULT_PROFILE).
         """
         self.meta_client = meta_client
-        self.brain = brain or AgentBrain()
+        self.business_profile = business_profile or DEFAULT_PROFILE
+        self.brain = brain or AgentBrain(business_profile=self.business_profile)
         self.memory = memory or AgentMemory()
         self.action_executor = action_executor or ActionExecutor(meta_client, dry_run=dry_run)
         self.dry_run = dry_run
@@ -404,7 +408,7 @@ Top campaigns by spend:
         Returns:
             Formatted markdown report
         """
-        report = f"""# Sea Street Detailing - Meta Ads Analysis Report
+        report = f"""# {self.business_profile.business_name} - Meta Ads Analysis Report
 **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}
 **Model:** {result.model}
 **Tokens Used:** {result.tokens_used:,}
