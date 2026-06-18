@@ -12,8 +12,10 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # Meta API Credentials
-    meta_access_token: str = Field(..., description="Meta API access token")
-    meta_ad_account_id: str = Field(..., description="Ad account ID (format: act_XXXXX)")
+    # Optional so demo mode (--demo / FakeDataProvider) runs without live creds.
+    # MetaAPIClient still raises at construction if these are missing for a real run.
+    meta_access_token: str = Field(default="", description="Meta API access token")
+    meta_ad_account_id: str = Field(default="", description="Ad account ID (format: act_XXXXX)")
     meta_app_id: str = Field(default="", description="Meta App ID (optional)")
     meta_app_secret: str = Field(default="", description="Meta App Secret (optional)")
 

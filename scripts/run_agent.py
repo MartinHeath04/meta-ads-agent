@@ -39,6 +39,7 @@ from agent.brain import AgentBrain
 from agent.memory import AgentMemory
 from agent.core import MetaAdsAgent
 from data_layer.meta_client import MetaAPIClient
+from data_layer.providers import FakeDataProvider
 
 
 def wait_for_network(max_wait: int = 120, check_interval: int = 5):
@@ -248,6 +249,8 @@ def main():
                         help="Email the report after analysis")
     parser.add_argument("--dry-run", action="store_true", default=True,
                         help="Don't execute actions (default: true)")
+    parser.add_argument("--demo", action="store_true",
+                        help="Run on seeded demo data (no live Meta credentials needed)")
     args = parser.parse_args()
 
     # Load settings
@@ -271,12 +274,16 @@ def main():
         success = test_meta()
         sys.exit(0 if success else 1)
 
-    # Wait for network (critical for wake-from-sleep scenarios)
-    logger.info("Checking network connectivity...")
-    if not wait_for_network(max_wait=120, check_interval=5):
-        logger.error("No network connectivity. Aborting.")
-        print("ERROR: No network connectivity after 2 minutes. Agent cannot run.")
-        sys.exit(1)
+    if args.demo:
+        logger.info("DEMO MODE: using seeded data (no live Meta credentials).")
+        print("\n*** DEMO MODE — seeded data, no live Meta account ***")
+    else:
+        # Wait for network (critical for wake-from-sleep scenarios)
+        logger.info("Checking network connectivity...")
+        if not wait_for_network(max_wait=120, check_interval=5):
+            logger.error("No network connectivity. Aborting.")
+            print("ERROR: No network connectivity after 2 minutes. Agent cannot run.")
+            sys.exit(1)
 
     # Retry logic for the full agent run
     max_retries = 3
@@ -292,8 +299,12 @@ def main():
             # Tenant business profile (placeholder default until per-tenant config exists)
             profile = DEFAULT_PROFILE
 
-            meta_client = MetaAPIClient()
-            logger.info("Meta API client initialized")
+            if args.demo:
+                meta_client = FakeDataProvider()
+                logger.info("Data provider: FakeDataProvider (demo)")
+            else:
+                meta_client = MetaAPIClient()
+                logger.info("Meta API client initialized")
 
             brain = AgentBrain(business_profile=profile)
             logger.info("Agent brain initialized")
