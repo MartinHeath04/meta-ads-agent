@@ -49,7 +49,7 @@ data/logs/*.log
 data/exports/*.md
 data/exports/*.html
 
-# Markdown files
+# Markdown files (only README.md is public; all other docs stay local)
 *.md
 !README.md
 

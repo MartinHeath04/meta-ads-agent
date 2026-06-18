@@ -1,88 +1,119 @@
-# Meta Ads Agent
+# Meta Ads AI Agent — Detailing Vertical
 
-An AI-powered agent that automatically analyzes and improves Meta (Facebook/Instagram) ad campaigns.
+A **multi-tenant AI agent** that analyzes Meta (Facebook/Instagram) advertising
+performance for detailing businesses and recommends optimizations to drive more
+inbound leads. Built around Claude: the model reasons over real campaign data
+rather than applying hardcoded rules.
 
-## What It Does
+> **Status:** report-only, evolving into an autonomous, multi-tenant agent with a
+> FastAPI service and a human-in-the-loop action layer. See the [Roadmap](#roadmap).
 
-- Connects to the Meta Marketing API to pull campaign, ad set, and ad-level performance data
-- Uses AI to analyze performance metrics, ad copy effectiveness, creative performance, and geographic trends
-- Generates daily reports with prioritized, actionable recommendations
-- Emails you the report on a schedule so you always know what's working and what's not
-- Learns from past decisions and outcomes to improve recommendations over time
+## What it does
+
+- Connects to the Meta Marketing API and pulls campaign, ad set, and ad-level data
+  (spend, impressions, CTR, cost per message, creatives, geo).
+- Uses Claude to analyze performance, ad copy, creative, and geographic trends —
+  grounded with industry benchmarks and aware of campaign type (boosted post vs
+  structured campaign).
+- Generates prioritized, actionable recommendations and emails a daily report.
+- Remembers past decisions and outcomes (SQLite) to improve over time.
+- Optimizes for the metric that matters to a service business: **messages received
+  (leads)** and **cost per message** — not vanity metrics.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────┐
-│           AGENT CORE                │
-│     AI-Powered Analysis Engine      │
-└──────────┬──────────┬───────────────┘
-           │          │
-     ┌─────▼──┐  ┌────▼────┐  ┌────────────┐
-     │  Data  │  │ Action  │  │   Memory   │
-     │ Layer  │  │  Layer  │  │   Layer    │
-     │Meta API│  │Safe Ops │  │ Learnings  │
-     └────────┘  └─────────┘  └────────────┘
+                ┌──────────────────────────────┐
+                │          AGENT CORE          │
+                │   Claude-powered reasoning   │
+                └───────┬───────────┬──────────┘
+                        │           │
+        ┌───────────────▼──┐   ┌────▼─────┐   ┌──────────────┐
+        │   Data Layer     │   │  Action  │   │    Memory    │
+        │  Meta API +      │   │  Layer   │   │   Layer      │
+        │  context builder │   │ (HITL)   │   │  (SQLite)    │
+        └──────────────────┘   └──────────┘   └──────────────┘
 ```
 
-## Features
+- **`data_layer/`** — Meta Marketing API client, typed models, campaign
+  classification, and the context builder that formats data for the model.
+- **`agent/`** — the reasoning loop, prompts/guardrails, memory, and action stubs.
+- **`config/`** — Pydantic-validated settings and tunable thresholds.
 
-- **Smart Analysis** - Goes beyond simple metrics to identify patterns, trends, and opportunities
-- **Copy & Creative Insights** - Evaluates which messaging and images drive conversions
-- **Geographic Intelligence** - Identifies top-performing locations and underserved areas
-- **Safety First** - Operates in dry-run mode by default; no changes without your approval
-- **Daily Email Reports** - Automated reports delivered to your inbox
-- **Memory & Learning** - Stores past decisions and outcomes to avoid repeating mistakes
+## Tech stack
+
+Python · `facebook-business` SDK · Anthropic Claude · Pydantic · SQLite · pytest
+
+## Key engineering details
+
+- **Reasoning, not rules** — Claude evaluates the data with industry benchmarks as
+  soft context and assigns confidence levels, instead of fixed if/else thresholds.
+- **Campaign-type awareness** — boosted posts are classified and judged differently
+  from structured Ads Manager campaigns (they optimize for engagement, not messages).
+- **Resilient data layer** — Meta's API filtering is unreliable, so data is fetched
+  in bulk and filtered client-side; reporting lag is accounted for so brand-new
+  campaigns aren't penalized as failures.
+- **Safety first** — no changes are made to live ad accounts without explicit human
+  approval.
 
 ## Setup
 
-1. Clone the repo
-2. Create a virtual environment and install dependencies:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
-3. Copy `.env.example` to `.env` and fill in your credentials:
-   ```bash
-   cp .env.example .env
-   ```
-4. Test your connections:
-   ```bash
-   python scripts/run_agent.py --test-meta
-   python scripts/run_agent.py --test-brain
-   ```
-5. Run the agent:
-   ```bash
-   python scripts/run_agent.py
-   ```
+```bash
+# 1. Clone, create a virtual environment, install dependencies
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# 2. Configure credentials (placeholders shown in .env.example)
+cp .env.example .env   # then fill in your values
+
+# 3. Verify connections
+python scripts/run_agent.py --test-meta
+python scripts/run_agent.py --test-brain
+```
+
+All credentials live in `.env` (gitignored). See `.env.example` for the required
+keys (Meta API token + ad account, Anthropic API key, SMTP for email).
 
 ## Usage
 
 ```bash
-# Full daily analysis
-python scripts/run_agent.py
-
-# Quick health check
-python scripts/run_agent.py --quick
-
-# Analyze last 14 days and email the report
-python scripts/run_agent.py --date-range last_14d --email
-
-# Test connections
-python scripts/run_agent.py --test-brain
-python scripts/run_agent.py --test-meta
+python scripts/run_agent.py                       # full analysis
+python scripts/run_agent.py --quick               # quick health check
+python scripts/run_agent.py --date-range last_14d --email   # analyze 14d + email
 ```
 
-## Project Structure
+## Tests
+
+```bash
+python -m pytest tests/ -v
+```
+
+## Project structure
 
 ```
-agent/           # Core AI agent (brain, memory, actions)
-data_layer/      # Meta Marketing API client and data models
-config/          # Settings and configuration
-scripts/         # Entry points and scheduling
-data/            # Database, exports, and logs
+agent/           # Reasoning loop, prompts, memory, actions
+data_layer/      # Meta API client, models, campaign classification, context builder
+config/          # Pydantic settings and thresholds
+scripts/         # CLI entry point and scheduling
+tests/           # pytest suite
 ```
+
+## Roadmap
+
+The project is being built out as a portfolio-grade, multi-tenant AI agent:
+
+- [x] Meta API integration, Claude-powered analysis, daily email reports
+- [x] Industry benchmarks + boosted-post vs structured-campaign classification
+- [ ] **Multi-tenant foundation** — config-driven business profiles, isolated data
+  and credentials per tenant, plus a demo mode that runs without live credentials
+- [ ] **FastAPI service** — REST endpoints, tenant onboarding, OpenAPI docs
+- [ ] **Agentic tool-use loop** — Claude tool calling with structured, human-approved
+  optimization actions
+- [ ] **Evaluation harness + observability** — eval suite for the agent's judgments,
+  token cost and latency tracking
+- [ ] **CI/CD, Docker, and a live demo deployment**
+- [ ] **Lightweight dashboard** — KPIs and an action-approval queue
 
 ## Requirements
 
@@ -92,4 +123,4 @@ data/            # Database, exports, and logs
 
 ## License
 
-Private - All rights reserved.
+Private — all rights reserved.
