@@ -13,6 +13,11 @@ BUSINESS CONTEXT:
 - Key metric: Cost per message
 - Ignore: Any campaign with "Marketplace listing boosted" in the name
 
+CAMPAIGN TYPES (each campaign in the data is labeled with a Type):
+- "Structured campaign": built in Ads Manager with chosen objective, optimization, and targeting. Judge these primarily on messages and cost per message — they are built to drive the goal directly.
+- "Boosted post": created via the page/post "Boost" button. These have limited optimization and targeting controls and usually optimize for engagement/reach, NOT messages. Expect a higher cost per message and judge them more on engagement, reach, and cheap awareness than on direct lead efficiency. If a structured-campaign goal is wanted, recommending a proper Ads Manager campaign is often the better move than expecting a boost to perform like one.
+- Compare like-for-like: do not penalize a boosted post against a structured campaign's cost per message, and note the type when explaining performance.
+
 SERVICES OFFERED:
 - Interior boat detailing
 - Full interior + compound and wax

@@ -16,6 +16,58 @@ class CampaignStatus(str, Enum):
     ARCHIVED = "ARCHIVED"
 
 
+class CampaignType(str, Enum):
+    """Whether a campaign was built in Ads Manager or created via the Boost button."""
+    CAMPAIGN = "campaign"          # Structured campaign built in Ads Manager
+    BOOSTED_POST = "boosted_post"  # Created via the page/post "Boost" button
+
+
+# Human-readable labels for display in reports/context.
+CAMPAIGN_TYPE_LABELS = {
+    CampaignType.CAMPAIGN: "Structured campaign",
+    CampaignType.BOOSTED_POST: "Boosted post",
+}
+
+# Boosted posts get auto-generated names. Match case-insensitively (substring).
+# See CLAUDE.md gotcha: page-boost campaigns show generic "Promoting website:..." names.
+_BOOST_NAME_MARKERS = (
+    "promoting website",
+    "promoting your post",
+    "promoting sea street",
+    "boosted",
+    "boost post",
+)
+
+# Objectives that ONLY come from boosting. Deliberately excludes OUTCOME_ENGAGEMENT,
+# which a real Messages campaign also uses — matching it would cause false positives.
+_BOOST_ONLY_OBJECTIVES = {
+    "POST_ENGAGEMENT",
+    "PAGE_LIKES",
+}
+
+
+def classify_campaign(campaign: "Campaign") -> CampaignType:
+    """Classify a campaign as a structured campaign or a boosted post.
+
+    The campaign name is the reliable signal (boosts get generic auto-generated
+    names); objective is only used for unambiguous boost-only objectives.
+    """
+    name = (campaign.name or "").lower()
+    if any(marker in name for marker in _BOOST_NAME_MARKERS):
+        return CampaignType.BOOSTED_POST
+
+    objective = (campaign.objective or "").upper()
+    if objective in _BOOST_ONLY_OBJECTIVES:
+        return CampaignType.BOOSTED_POST
+
+    return CampaignType.CAMPAIGN
+
+
+def campaign_type_label(campaign: "Campaign") -> str:
+    """Human-readable type label for a campaign (e.g. for reports)."""
+    return CAMPAIGN_TYPE_LABELS[classify_campaign(campaign)]
+
+
 class AdSetStatus(str, Enum):
     ACTIVE = "ACTIVE"
     PAUSED = "PAUSED"

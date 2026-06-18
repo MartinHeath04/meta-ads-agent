@@ -9,7 +9,7 @@ import logging
 from typing import Optional
 from datetime import datetime
 
-from .models import Campaign, AdSet, Ad, Insights
+from .models import Campaign, AdSet, Ad, Insights, campaign_type_label
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,7 @@ class ContextBuilder:
                 lines.append(f"""
 ### {campaign.name}
 - **ID:** {campaign.id}
+- **Type:** {campaign_type_label(campaign)}
 - **Status:** {campaign.status}
 - **Objective:** {campaign.objective or 'Not specified'}
 - **Spend:** ${insight.spend:.2f}
@@ -78,6 +79,7 @@ class ContextBuilder:
                 lines.append(f"""
 ### {campaign.name}
 - **ID:** {campaign.id}
+- **Type:** {campaign_type_label(campaign)}
 - **Status:** {campaign.status}
 - **No performance data available for this period**
 """)
