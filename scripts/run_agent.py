@@ -35,6 +35,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 from config.settings import get_settings
 from config.profiles import DEFAULT_PROFILE
+from config.demo_tenants import get_demo_tenant, list_demo_tenants
 from agent.brain import AgentBrain
 from agent.memory import AgentMemory
 from agent.core import MetaAdsAgent
@@ -251,7 +252,17 @@ def main():
                         help="Don't execute actions (default: true)")
     parser.add_argument("--demo", action="store_true",
                         help="Run on seeded demo data (no live Meta credentials needed)")
+    parser.add_argument("--tenant", default=DEFAULT_PROFILE.tenant_id,
+                        help="Demo tenant id to analyze (use with --demo; see --list-tenants)")
+    parser.add_argument("--list-tenants", action="store_true",
+                        help="List available demo tenants and exit")
     args = parser.parse_args()
+
+    if args.list_tenants:
+        print("Available demo tenants:")
+        for p in list_demo_tenants():
+            print(f"  {p.tenant_id:28s} {p.business_name} — {p.location}")
+        sys.exit(0)
 
     # Load settings
     try:
@@ -296,13 +307,13 @@ def main():
             # Initialize components for full run
             print("Initializing agent components...")
 
-            # Tenant business profile (placeholder default until per-tenant config exists)
-            profile = DEFAULT_PROFILE
-
+            # Tenant business profile + data source
             if args.demo:
-                meta_client = FakeDataProvider()
-                logger.info("Data provider: FakeDataProvider (demo)")
+                profile = get_demo_tenant(args.tenant)
+                meta_client = FakeDataProvider(profile=profile)
+                logger.info(f"Data provider: FakeDataProvider (demo tenant: {profile.tenant_id})")
             else:
+                profile = DEFAULT_PROFILE
                 meta_client = MetaAPIClient()
                 logger.info("Meta API client initialized")
 

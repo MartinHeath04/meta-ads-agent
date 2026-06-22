@@ -66,7 +66,23 @@ class FakeDataProvider:
     "Marketplace listing boosted" campaigns and honoring `status_filter`.
     """
 
-    def __init__(self):
+    def __init__(self, profile=None):
+        """
+        Args:
+            profile: Optional BusinessProfile. When given, the account name reflects
+                the business and the seeded metrics are varied by a deterministic
+                per-tenant factor so each demo tenant's report differs. When omitted,
+                returns the generic baseline dataset.
+        """
+        self.profile = profile
+        if profile is not None:
+            # Deterministic factor in ~[0.7, 1.3] so each tenant's numbers differ.
+            self._factor = 0.7 + (sum(ord(c) for c in profile.tenant_id) % 7) / 10.0
+            self._account_name = profile.business_name
+        else:
+            self._factor = 1.0
+            self._account_name = "Demo Detailing Co (seeded)"
+
         now = datetime.now(timezone.utc)
         established = now - timedelta(days=11)  # >7 days of data, not "new"
 
@@ -154,50 +170,52 @@ class FakeDataProvider:
             ),
         ]
 
-        # --- Insights (id-keyed). Structured campaign converts efficiently;
-        #     the boost reaches more but costs much more per message. ---
+        # --- Insights (id-keyed). Base numbers are scaled per tenant (see _scaled).
+        #     Structured campaign converts efficiently; the boost reaches more but
+        #     costs much more per message. ---
+        messages_base = dict(
+            spend=180.0, impressions=12000, reach=8200, frequency=1.46,
+            clicks=240, link_clicks=205, messages=22,
+        )
+        boost_base = dict(
+            spend=90.0, impressions=15500, reach=11800, frequency=1.31,
+            clicks=310, link_clicks=120, messages=6,
+        )
         self._campaign_insights: dict[str, Insights] = {
-            "camp_messages_spring": _insight(
-                "camp_messages_spring", "campaign",
-                spend=180.0, impressions=12000, reach=8200, frequency=1.46,
-                clicks=240, link_clicks=205, messages=22, cost_per_message=8.18,
-            ),
-            "camp_boost_beforeafter": _insight(
-                "camp_boost_beforeafter", "campaign",
-                spend=90.0, impressions=15500, reach=11800, frequency=1.31,
-                clicks=310, link_clicks=120, messages=6, cost_per_message=15.0,
-            ),
+            "camp_messages_spring": self._scaled("camp_messages_spring", "campaign", messages_base),
+            "camp_boost_beforeafter": self._scaled("camp_boost_beforeafter", "campaign", boost_base),
         }
         self._adset_insights: dict[str, Insights] = {
-            "adset_messages": _insight(
-                "adset_messages", "adset",
-                spend=180.0, impressions=12000, reach=8200, frequency=1.46,
-                clicks=240, link_clicks=205, messages=22, cost_per_message=8.18,
-            ),
-            "adset_boost": _insight(
-                "adset_boost", "adset",
-                spend=90.0, impressions=15500, reach=11800, frequency=1.31,
-                clicks=310, link_clicks=120, messages=6, cost_per_message=15.0,
-            ),
+            "adset_messages": self._scaled("adset_messages", "adset", messages_base),
+            "adset_boost": self._scaled("adset_boost", "adset", boost_base),
         }
         self._ad_insights: dict[str, Insights] = {
-            "ad_messages": _insight(
-                "ad_messages", "ad",
-                spend=180.0, impressions=12000, reach=8200, frequency=1.46,
-                clicks=240, link_clicks=205, messages=22, cost_per_message=8.18,
-            ),
-            "ad_boost": _insight(
-                "ad_boost", "ad",
-                spend=90.0, impressions=15500, reach=11800, frequency=1.31,
-                clicks=310, link_clicks=120, messages=6, cost_per_message=15.0,
-            ),
+            "ad_messages": self._scaled("ad_messages", "ad", messages_base),
+            "ad_boost": self._scaled("ad_boost", "ad", boost_base),
         }
+
+    def _scaled(self, entity_id: str, entity_type: str, base: dict) -> Insights:
+        """Build an Insights from base metrics scaled by the per-tenant factor."""
+        f = self._factor
+        spend = round(base["spend"] * f, 2)
+        messages = max(1, round(base["messages"] * f))
+        return _insight(
+            entity_id, entity_type,
+            spend=spend,
+            impressions=int(base["impressions"] * f),
+            reach=int(base["reach"] * f),
+            frequency=base["frequency"],
+            clicks=int(base["clicks"] * f),
+            link_clicks=int(base["link_clicks"] * f),
+            messages=messages,
+            cost_per_message=round(spend / messages, 2),
+        )
 
     # --- DataProvider interface ---
 
     def get_account_info(self) -> dict:
         return {
-            "name": "Demo Detailing Co (seeded)",
+            "name": self._account_name,
             "account_id": "act_DEMO",
             "account_status": 1,
             "currency": "USD",
