@@ -5,6 +5,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from config.profiles import BusinessProfile
+from agent.actions import ProposedAction
 
 
 class HealthResponse(BaseModel):
@@ -57,6 +58,33 @@ class ReportOut(BaseModel):
     tokens_used: int
     executive_summary: str
     recommendations: list[RecommendationOut] = []
+
+
+class ProposedActionOut(BaseModel):
+    """A proposed action in a tenant's human-in-the-loop approval queue."""
+    id: int
+    action_type: str
+    target_type: str
+    target_id: str
+    target_name: str
+    rationale: str
+    confidence: str
+    status: str
+    created_at: str
+
+    @classmethod
+    def from_action(cls, a: ProposedAction) -> "ProposedActionOut":
+        return cls(
+            id=a.id,
+            action_type=a.action_type,
+            target_type=a.target_type,
+            target_id=a.target_id,
+            target_name=a.target_name,
+            rationale=a.rationale,
+            confidence=a.confidence,
+            status=a.status,
+            created_at=a.timestamp,
+        )
 
 
 class AnalyzeJob(BaseModel):

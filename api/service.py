@@ -13,11 +13,15 @@ from datetime import datetime, timezone
 from typing import Callable
 
 from config.demo_tenants import get_demo_tenant
+from config.settings import get_settings
 from data_layer.providers import FakeDataProvider
 from agent.brain import AgentBrain
 from agent.memory import AgentMemory
 from agent.core import MetaAdsAgent
 from api.schemas import AnalyzeJob, ReportOut, RecommendationOut
+
+# A memory provider builds a tenant-scoped AgentMemory.
+MemoryProvider = Callable[[str], AgentMemory]
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +59,16 @@ def run_analysis(tenant_id: str, date_range: str = "last_7d") -> ReportOut:
 def get_analyzer() -> Analyzer:
     """Dependency: the analyzer used by the analyze endpoint (overridable in tests)."""
     return run_analysis
+
+
+def get_memory_provider() -> MemoryProvider:
+    """Dependency: builds a tenant-scoped AgentMemory on the configured database.
+
+    Overridable in tests so endpoints run against a temporary database instead of
+    the real one.
+    """
+    db_path = str(get_settings().database_path)
+    return lambda tenant_id: AgentMemory(db_path=db_path, tenant_id=tenant_id)
 
 
 def create_job(tenant_id: str) -> AnalyzeJob:
