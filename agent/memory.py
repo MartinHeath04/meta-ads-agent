@@ -12,6 +12,8 @@ from typing import Optional
 from dataclasses import dataclass, asdict
 import sqlite3
 
+from .actions import ProposedAction, ActionStatus
+
 logger = logging.getLogger(__name__)
 
 
@@ -120,6 +122,23 @@ class AgentMemory:
                 executive_summary TEXT,
                 tokens_used INTEGER,
                 model TEXT
+            )
+        """)
+
+        # Proposed actions queue (human-in-the-loop). New table — born tenant-scoped.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS agent_actions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tenant_id TEXT NOT NULL DEFAULT 'sea-street-detailing',
+                timestamp TEXT NOT NULL,
+                action_type TEXT NOT NULL,
+                target_type TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                target_name TEXT NOT NULL,
+                rationale TEXT NOT NULL,
+                confidence TEXT NOT NULL,
+                status TEXT NOT NULL,
+                parameters TEXT
             )
         """)
 
@@ -439,3 +458,97 @@ class AgentMemory:
         conn.close()
 
         logger.info("Saved analysis to history")
+
+    # --- Proposed actions (human-in-the-loop queue) ---
+
+    _ACTION_COLS = (
+        "id, timestamp, action_type, target_type, target_id, "
+        "target_name, rationale, confidence, status, parameters"
+    )
+
+    def _row_to_action(self, row) -> ProposedAction:
+        return ProposedAction(
+            id=row[0],
+            timestamp=row[1],
+            action_type=row[2],
+            target_type=row[3],
+            target_id=row[4],
+            target_name=row[5],
+            rationale=row[6],
+            confidence=row[7],
+            status=row[8],
+            parameters=json.loads(row[9]) if row[9] else None,
+        )
+
+    def propose_action(self, action: ProposedAction) -> int:
+        """Add a proposed action to this tenant's queue. Returns its id."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO agent_actions
+            (tenant_id, timestamp, action_type, target_type, target_id,
+             target_name, rationale, confidence, status, parameters)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            self.tenant_id,
+            action.timestamp or datetime.now().isoformat(),
+            action.action_type,
+            action.target_type,
+            action.target_id,
+            action.target_name,
+            action.rationale,
+            action.confidence,
+            action.status or ActionStatus.PROPOSED.value,
+            json.dumps(action.parameters) if action.parameters else None,
+        ))
+        action_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        logger.info(f"Proposed action {action_id}: {action.action_type} on {action.target_name}")
+        return action_id
+
+    def list_actions(self, status: Optional[str] = None, limit: int = 50) -> list[ProposedAction]:
+        """List this tenant's proposed actions, optionally filtered by status."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        if status:
+            cursor.execute(
+                f"SELECT {self._ACTION_COLS} FROM agent_actions "
+                "WHERE tenant_id = ? AND status = ? ORDER BY timestamp DESC LIMIT ?",
+                (self.tenant_id, status, limit),
+            )
+        else:
+            cursor.execute(
+                f"SELECT {self._ACTION_COLS} FROM agent_actions "
+                "WHERE tenant_id = ? ORDER BY timestamp DESC LIMIT ?",
+                (self.tenant_id, limit),
+            )
+        rows = cursor.fetchall()
+        conn.close()
+        return [self._row_to_action(r) for r in rows]
+
+    def get_action(self, action_id: int) -> Optional[ProposedAction]:
+        """Get one proposed action by id, scoped to this tenant."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            f"SELECT {self._ACTION_COLS} FROM agent_actions WHERE id = ? AND tenant_id = ?",
+            (action_id, self.tenant_id),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return self._row_to_action(row) if row else None
+
+    def set_action_status(self, action_id: int, status: str) -> bool:
+        """Update a proposed action's status (tenant-scoped). Returns True if a row changed."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE agent_actions SET status = ? WHERE id = ? AND tenant_id = ?",
+            (status, action_id, self.tenant_id),
+        )
+        updated = cursor.rowcount
+        conn.commit()
+        conn.close()
+        logger.info(f"Set action {action_id} status -> {status} ({updated} row)")
+        return updated > 0

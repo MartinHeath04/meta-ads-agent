@@ -36,6 +36,32 @@ class ApprovalStatus(str, Enum):
     AUTO_APPROVED = "auto_approved"
 
 
+class ActionStatus(str, Enum):
+    """Lifecycle status of a proposed action in the human-in-the-loop queue."""
+    PROPOSED = "proposed"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+@dataclass
+class ProposedAction:
+    """An optimization action proposed by the agent, awaiting human review.
+
+    Persisted per tenant in agent memory. The agent (Claude tool use, Phase 3
+    step 3) proposes these; a human approves or rejects before anything executes.
+    """
+    id: Optional[int]
+    timestamp: str
+    action_type: str  # one of ActionType values
+    target_type: str  # "campaign", "adset", "ad"
+    target_id: str
+    target_name: str
+    rationale: str
+    confidence: str  # "high", "medium", "low"
+    status: str = ActionStatus.PROPOSED.value
+    parameters: Optional[dict] = None
+
+
 @dataclass
 class ActionRequest:
     """A request to take an action on the ad account."""
