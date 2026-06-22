@@ -311,7 +311,7 @@ def main():
 
             db_path = str(settings.database_path)
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-            memory = AgentMemory(db_path=db_path)
+            memory = AgentMemory(db_path=db_path, tenant_id=profile.tenant_id)
             logger.info("Agent memory initialized")
 
             agent = MetaAdsAgent(

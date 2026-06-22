@@ -53,7 +53,7 @@ class MetaAdsAgent:
         self.meta_client = meta_client
         self.business_profile = business_profile or DEFAULT_PROFILE
         self.brain = brain or AgentBrain(business_profile=self.business_profile)
-        self.memory = memory or AgentMemory()
+        self.memory = memory or AgentMemory(tenant_id=self.business_profile.tenant_id)
         self.action_executor = action_executor or ActionExecutor(meta_client, dry_run=dry_run)
         self.dry_run = dry_run
 

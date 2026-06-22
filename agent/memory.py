@@ -52,19 +52,27 @@ class AgentMemory:
     can learn from past experience and avoid repeating mistakes.
     """
 
-    def __init__(self, db_path: str = "data/sea_street.db"):
+    # Tenant assigned to rows that predate tenant scoping (only Sea Street existed then).
+    _LEGACY_TENANT_ID = "sea-street-detailing"
+
+    def __init__(self, db_path: str = "data/sea_street.db", tenant_id: str = "default"):
         """
         Initialize agent memory.
 
         Args:
             db_path: Path to SQLite database
+            tenant_id: Tenant whose memory this instance reads/writes. All rows are
+                scoped by tenant_id so multiple businesses can share one database.
         """
         self.db_path = db_path
+        self.tenant_id = tenant_id
         self._init_tables()
-        logger.info(f"AgentMemory initialized with database: {db_path}")
+        logger.info(
+            f"AgentMemory initialized with database: {db_path} (tenant: {tenant_id})"
+        )
 
     def _init_tables(self):
-        """Create memory tables if they don't exist."""
+        """Create memory tables if they don't exist, then ensure tenant scoping."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
@@ -72,6 +80,7 @@ class AgentMemory:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS agent_decisions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tenant_id TEXT NOT NULL DEFAULT 'sea-street-detailing',
                 timestamp TEXT NOT NULL,
                 action_type TEXT NOT NULL,
                 target_type TEXT NOT NULL,
@@ -90,6 +99,7 @@ class AgentMemory:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS agent_learnings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tenant_id TEXT NOT NULL DEFAULT 'sea-street-detailing',
                 timestamp TEXT NOT NULL,
                 pattern_type TEXT NOT NULL,
                 pattern TEXT NOT NULL,
@@ -103,6 +113,7 @@ class AgentMemory:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS agent_analyses (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tenant_id TEXT NOT NULL DEFAULT 'sea-street-detailing',
                 timestamp TEXT NOT NULL,
                 date_range TEXT NOT NULL,
                 raw_response TEXT NOT NULL,
@@ -112,8 +123,23 @@ class AgentMemory:
             )
         """)
 
+        # Migrate any pre-tenant databases: add the column and backfill old rows.
+        for table in ("agent_decisions", "agent_learnings", "agent_analyses"):
+            self._ensure_tenant_column(cursor, table)
+
         conn.commit()
         conn.close()
+
+    def _ensure_tenant_column(self, cursor, table: str):
+        """Add tenant_id to a legacy table and assign existing rows to the legacy tenant."""
+        cursor.execute(f"PRAGMA table_info({table})")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "tenant_id" not in columns:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN tenant_id TEXT")
+            cursor.execute(
+                f"UPDATE {table} SET tenant_id = ? WHERE tenant_id IS NULL",
+                (self._LEGACY_TENANT_ID,),
+            )
 
     def record_decision(self, decision: Decision) -> int:
         """
@@ -130,10 +156,11 @@ class AgentMemory:
 
         cursor.execute("""
             INSERT INTO agent_decisions
-            (timestamp, action_type, target_type, target_id, target_name,
+            (tenant_id, timestamp, action_type, target_type, target_id, target_name,
              action, reason, confidence, outcome, outcome_notes, human_feedback)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
+            self.tenant_id,
             decision.timestamp or datetime.now().isoformat(),
             decision.action_type,
             decision.target_type,
@@ -174,8 +201,8 @@ class AgentMemory:
         cursor.execute("""
             UPDATE agent_decisions
             SET outcome = ?, outcome_notes = ?
-            WHERE id = ?
-        """, (outcome, notes, decision_id))
+            WHERE id = ? AND tenant_id = ?
+        """, (outcome, notes, decision_id, self.tenant_id))
 
         conn.commit()
         conn.close()
@@ -196,8 +223,8 @@ class AgentMemory:
         cursor.execute("""
             UPDATE agent_decisions
             SET human_feedback = ?
-            WHERE id = ?
-        """, (feedback, decision_id))
+            WHERE id = ? AND tenant_id = ?
+        """, (feedback, decision_id, self.tenant_id))
 
         conn.commit()
         conn.close()
@@ -219,9 +246,10 @@ class AgentMemory:
 
         cursor.execute("""
             INSERT INTO agent_learnings
-            (timestamp, pattern_type, pattern, evidence, success, confidence)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (tenant_id, timestamp, pattern_type, pattern, evidence, success, confidence)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
+            self.tenant_id,
             learning.timestamp or datetime.now().isoformat(),
             learning.pattern_type,
             learning.pattern,
@@ -255,9 +283,10 @@ class AgentMemory:
                    target_name, action, reason, confidence, outcome,
                    outcome_notes, human_feedback
             FROM agent_decisions
+            WHERE tenant_id = ?
             ORDER BY timestamp DESC
             LIMIT ?
-        """, (limit,))
+        """, (self.tenant_id, limit))
 
         rows = cursor.fetchall()
         conn.close()
@@ -289,10 +318,10 @@ class AgentMemory:
         cursor.execute("""
             SELECT id, timestamp, pattern_type, pattern, evidence, success, confidence
             FROM agent_learnings
-            WHERE success = 1
+            WHERE success = 1 AND tenant_id = ?
             ORDER BY timestamp DESC
             LIMIT ?
-        """, (limit,))
+        """, (self.tenant_id, limit))
 
         rows = cursor.fetchall()
         conn.close()
@@ -315,10 +344,10 @@ class AgentMemory:
         cursor.execute("""
             SELECT id, timestamp, pattern_type, pattern, evidence, success, confidence
             FROM agent_learnings
-            WHERE success = 0
+            WHERE success = 0 AND tenant_id = ?
             ORDER BY timestamp DESC
             LIMIT ?
-        """, (limit,))
+        """, (self.tenant_id, limit))
 
         rows = cursor.fetchall()
         conn.close()
@@ -394,9 +423,10 @@ class AgentMemory:
 
         cursor.execute("""
             INSERT INTO agent_analyses
-            (timestamp, date_range, raw_response, executive_summary, tokens_used, model)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (tenant_id, timestamp, date_range, raw_response, executive_summary, tokens_used, model)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
+            self.tenant_id,
             datetime.now().isoformat(),
             date_range,
             raw_response,
