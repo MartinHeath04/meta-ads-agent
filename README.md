@@ -105,15 +105,15 @@ The project is being built out as a portfolio-grade, multi-tenant AI agent:
 
 - [x] Meta API integration, Claude-powered analysis, daily email reports
 - [x] Industry benchmarks + boosted-post vs structured-campaign classification
-- [ ] **Multi-tenant foundation** — config-driven business profiles, isolated data
+- [x] **Multi-tenant foundation** — config-driven business profiles, isolated data
   and credentials per tenant, plus a demo mode that runs without live credentials
-- [ ] **FastAPI service** — REST endpoints, tenant onboarding, OpenAPI docs
-- [ ] **Agentic tool-use loop** — Claude tool calling with structured, human-approved
+- [x] **FastAPI service** — REST endpoints, tenant onboarding, OpenAPI docs
+- [x] **Agentic tool-use loop** — Claude tool calling with structured, human-approved
   optimization actions
-- [ ] **Evaluation harness + observability** — eval suite for the agent's judgments,
+- [x] **Evaluation harness + observability** — eval suite for the agent's judgments,
   token cost and latency tracking
-- [ ] **CI/CD, Docker, and a live demo deployment**
-- [ ] **Lightweight dashboard** — KPIs and an action-approval queue
+- [x] **CI/CD, Docker, and a live demo deployment**
+- [x] **Lightweight dashboard** — KPIs and an action-approval queue
 
 ## Requirements
 
