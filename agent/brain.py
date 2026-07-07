@@ -9,10 +9,18 @@ import os
 import logging
 from typing import Optional
 from dataclasses import dataclass
+from datetime import datetime
 
 import anthropic
 
-from .prompts import build_system_prompt, ANALYSIS_PROMPT_TEMPLATE, QUICK_ANALYSIS_PROMPT
+from .prompts import (
+    build_system_prompt,
+    ANALYSIS_PROMPT_TEMPLATE,
+    QUICK_ANALYSIS_PROMPT,
+    PROPOSE_ACTIONS_PROMPT,
+    PROPOSE_ACTION_TOOL,
+)
+from .actions import ProposedAction, ActionStatus
 from config.profiles import BusinessProfile, DEFAULT_PROFILE
 
 logger = logging.getLogger(__name__)
@@ -175,6 +183,78 @@ class AgentBrain:
         )
 
         return message.content[0].text
+
+    def propose_actions(
+        self,
+        campaign_data: str,
+        adset_data: str,
+        ad_data: str,
+        date_range: str = "Last 7 Days",
+        max_iterations: int = 5,
+    ) -> list[ProposedAction]:
+        """Run a Claude tool-use loop where the agent proposes optimization actions.
+
+        The agent reasons over the data and calls the `propose_action` tool once per
+        recommended action. Each call becomes a ProposedAction (status "proposed").
+        Nothing executes — the results are meant for a human approval queue.
+
+        Uses a manual agentic loop (not the SDK tool runner) so the caller keeps full
+        control and no action is ever auto-executed.
+        """
+        prompt = PROPOSE_ACTIONS_PROMPT.format(
+            business_name=self.business_profile.business_name,
+            date_range=date_range,
+            campaign_data=campaign_data,
+            adset_data=adset_data,
+            ad_data=ad_data,
+        )
+        # Cache the (large, stable) system prompt across loop iterations.
+        system = [{"type": "text", "text": self.system_prompt, "cache_control": {"type": "ephemeral"}}]
+        messages = [{"role": "user", "content": prompt}]
+        proposed: list[ProposedAction] = []
+
+        for _ in range(max_iterations):
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=self.max_tokens,
+                system=system,
+                tools=[PROPOSE_ACTION_TOOL],
+                messages=messages,
+            )
+
+            tool_uses = [b for b in response.content if b.type == "tool_use"]
+            if response.stop_reason != "tool_use" or not tool_uses:
+                break
+
+            messages.append({"role": "assistant", "content": response.content})
+            results = []
+            for tu in tool_uses:
+                if tu.name == "propose_action":
+                    proposed.append(self._action_from_tool_input(tu.input))
+                results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tu.id,
+                    "content": "Recorded. Propose the next action, or stop if done.",
+                })
+            messages.append({"role": "user", "content": results})
+
+        logger.info(f"Agent proposed {len(proposed)} action(s) for review.")
+        return proposed
+
+    @staticmethod
+    def _action_from_tool_input(data: dict) -> ProposedAction:
+        """Map a propose_action tool call's input to a ProposedAction."""
+        return ProposedAction(
+            id=None,
+            timestamp=datetime.now().isoformat(),
+            action_type=data.get("action_type", ""),
+            target_type=data.get("target_type", ""),
+            target_id=data.get("target_id", ""),
+            target_name=data.get("target_name", ""),
+            rationale=data.get("rationale", ""),
+            confidence=data.get("confidence", "medium"),
+            status=ActionStatus.PROPOSED.value,
+        )
 
     def _parse_analysis_response(self, response: str) -> AnalysisResult:
         """

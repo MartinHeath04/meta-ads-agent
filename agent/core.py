@@ -126,6 +126,29 @@ class MetaAdsAgent:
         logger.info(f"Analysis complete. {len(result.recommendations)} recommendations generated.")
         return result
 
+    def propose_and_queue_actions(self, date_range: str = "last_7d") -> list:
+        """Have the agent propose structured optimization actions via tool use and
+        queue them for human approval (tenant-scoped). Nothing is executed.
+
+        Returns the list of ProposedAction objects (each already persisted).
+        """
+        data = self._fetch_all_data(date_range)
+        campaign_data = self._format_campaign_data(data["campaigns"], data["campaign_insights"])
+        adset_data = self._format_adset_data(data["adsets"], data["adset_insights"])
+        ad_data = self._format_ad_data(data["ads"], data["ad_insights"])
+
+        actions = self.brain.propose_actions(
+            campaign_data=campaign_data,
+            adset_data=adset_data,
+            ad_data=ad_data,
+            date_range=date_range,
+        )
+        for action in actions:
+            action.id = self.memory.propose_action(action)
+
+        logger.info(f"Queued {len(actions)} proposed action(s) for approval.")
+        return actions
+
     def run_quick_check(self) -> str:
         """
         Run a quick health check on the account.

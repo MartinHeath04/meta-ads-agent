@@ -44,6 +44,8 @@ def run_analysis(tenant_id: str, date_range: str = "last_7d") -> ReportOut:
         business_profile=profile,
     )
     result = agent.run_daily_analysis(date_range=date_range)
+    # Also have the agent propose structured actions into the tenant's approval queue.
+    agent.propose_and_queue_actions(date_range=date_range)
     return ReportOut(
         report_id=uuid.uuid4().hex,
         tenant_id=profile.tenant_id,

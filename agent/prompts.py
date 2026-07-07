@@ -175,6 +175,86 @@ Generate a prioritized list of specific actions. For each action:
 Focus on high-impact, low-risk actions first."""
 
 
+PROPOSE_ACTIONS_PROMPT = """Given the following Meta Ads data for {business_name}:
+
+## Campaign Performance ({date_range})
+{campaign_data}
+
+## Ad Set Performance
+{adset_data}
+
+## Individual Ads (with copy and creative info)
+{ad_data}
+
+---
+
+Review this data and propose specific optimization actions. For EACH action you
+recommend, call the `propose_action` tool exactly once. Propose only concrete,
+well-justified actions — it is fine to propose few (or none) if the data is thin.
+Respect the recommendation guardrails: no pausing/major budget changes on
+campaigns with less than 7 days of data or meaningful spend.
+
+Every proposed action goes into a human approval queue — nothing executes
+automatically. When you have proposed all the actions you intend to, stop
+(do not call the tool again)."""
+
+
+# Tool the agent calls (once per proposed action) during the tool-use loop.
+# strict=True guarantees the input validates against this schema exactly.
+PROPOSE_ACTION_TOOL = {
+    "name": "propose_action",
+    "description": (
+        "Propose a single optimization action for human review. Call once per "
+        "distinct action you recommend. Actions are queued for approval and never "
+        "executed automatically."
+    ),
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "action_type": {
+                "type": "string",
+                "enum": [
+                    "pause_ad",
+                    "pause_adset",
+                    "pause_campaign",
+                    "reduce_budget",
+                    "increase_budget",
+                    "update_copy",
+                    "update_targeting",
+                ],
+                "description": "The kind of change to make.",
+            },
+            "target_type": {
+                "type": "string",
+                "enum": ["campaign", "adset", "ad"],
+                "description": "Which entity level the action applies to.",
+            },
+            "target_id": {"type": "string", "description": "The entity's ID from the data."},
+            "target_name": {"type": "string", "description": "The entity's name, for the reviewer."},
+            "rationale": {
+                "type": "string",
+                "description": "Why this action helps, grounded in the data (metrics, trends).",
+            },
+            "confidence": {
+                "type": "string",
+                "enum": ["high", "medium", "low"],
+                "description": "How confident you are this action will help.",
+            },
+        },
+        "required": [
+            "action_type",
+            "target_type",
+            "target_id",
+            "target_name",
+            "rationale",
+            "confidence",
+        ],
+        "additionalProperties": False,
+    },
+}
+
+
 MEMORY_CONTEXT_TEMPLATE = """## Previous Decisions & Outcomes
 
 ### Actions Taken Previously:
